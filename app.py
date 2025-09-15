@@ -1,42 +1,53 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, Response
+import json
 
 app = Flask(__name__)
 
-# Simple CORS handling without flask-cors
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>', methods=['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'])
+def catch_all(path):
+    # Log what we're receiving
+    print(f"Path: {path}, Method: {request.method}")
+    
+    # Handle OPTIONS for CORS
+    if request.method == 'OPTIONS':
+        response = Response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    
+    # Handle root
+    if path == '':
+        data = {"status": "Backend running", "path": path, "method": request.method}
+        response = Response(json.dumps(data), mimetype='application/json')
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    
+    # Handle api/dvnc
+    if path == 'api/dvnc':
+        if request.method == 'GET':
+            data = {"message": "Use POST", "path": path}
+        else:  # POST
+            body = {}
+            try:
+                body = request.get_json() or {}
+            except:
+                pass
+            data = {
+                "analysis": f"Leonardo analyzes: {body.get('prompt', 'test')}",
+                "confidence": 0.9
+            }
+        
+        response = Response(json.dumps(data), mimetype='application/json')
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    
+    # Fallback
+    data = {"error": "Not found", "path": path, "method": request.method}
+    response = Response(json.dumps(data), mimetype='application/json', status=404)
+    response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 
-@app.route('/')
-def home():
-    return jsonify({
-        "status": "DVNC Backend Running",
-        "message": "API endpoint available at /api/dvnc"
-    })
-
-@app.route('/api/dvnc', methods=['GET', 'POST', 'OPTIONS'])
-def chat():
-    # Handle OPTIONS
-    if request.method == 'OPTIONS':
-        return '', 204
-    
-    # Handle GET
-    if request.method == 'GET':
-        return jsonify({"message": "Use POST to send messages"})
-    
-    # Handle POST
-    if request.method == 'POST':
-        data = request.get_json() if request.is_json else {}
-        user_message = data.get('prompt', 'Hello')
-        model = data.get('model', 'synthesis')
-        
-        return jsonify({
-            'analysis': f"Leonardo's {model} analysis: {user_message}",
-            'confidence': 0.92
-        })
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
